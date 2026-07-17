@@ -164,6 +164,53 @@ const tools = [
     },
     handler: (a) => api('DELETE', '/documents/' + encodeURIComponent(a.id) + (a.hard ? '?hard=true' : '')),
   },
+  {
+    name: 'list_tasks',
+    description: 'List tasks. filter can be "inbox" (unscheduled), "today", "upcoming", or "all" (default).',
+    inputSchema: {
+      type: 'object',
+      properties: { filter: { type: 'string', enum: ['inbox', 'today', 'upcoming', 'all'], description: 'Which tasks to return' } },
+    },
+    handler: (a) => api('GET', '/tasks?filter=' + encodeURIComponent(a.filter || 'all')),
+  },
+  {
+    name: 'create_task',
+    description: 'Create a task. Optionally schedule it with a due date (epoch milliseconds). Omit due to place it in the Inbox.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Task text' },
+        due: { type: 'number', description: 'Due date as epoch milliseconds (optional)' },
+      },
+      required: ['title'],
+    },
+    handler: (a) => api('POST', '/tasks', a),
+  },
+  {
+    name: 'update_task',
+    description: 'Update a task by id — mark it done/undone, rename it, or reschedule it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Task id' },
+        title: { type: 'string' },
+        done: { type: 'boolean' },
+        due: { type: 'number', description: 'Due date as epoch milliseconds' },
+      },
+      required: ['id'],
+    },
+    handler: (a) => { const { id, ...patch } = a; return api('PATCH', '/tasks/' + encodeURIComponent(id), patch); },
+  },
+  {
+    name: 'delete_task',
+    description: 'Delete a task by id.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'Task id' } },
+      required: ['id'],
+    },
+    handler: (a) => api('DELETE', '/tasks/' + encodeURIComponent(a.id)),
+  },
 ];
 
 const toolMap = Object.fromEntries(tools.map((t) => [t.name, t]));

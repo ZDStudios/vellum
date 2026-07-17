@@ -45,7 +45,7 @@ def uid():
 
 class Store:
     def __init__(self):
-        self.data = {"spaces": [], "documents": []}
+        self.data = {"spaces": [], "documents": [], "tasks": []}
         self.load()
 
     def load(self):
@@ -55,9 +55,10 @@ class Store:
                     self.data = json.load(f)
                 self.data.setdefault("spaces", [])
                 self.data.setdefault("documents", [])
+                self.data.setdefault("tasks", [])
         except Exception as e:
             print("Failed to read data file, starting fresh:", e)
-            self.data = {"spaces": [], "documents": []}
+            self.data = {"spaces": [], "documents": [], "tasks": []}
 
     def persist(self):
         tmp = DB_PATH + ".tmp"
@@ -186,24 +187,96 @@ class Store:
                and (q in d["title"].lower() or q in json.dumps(d["content"]).lower())]
         return sorted(res, key=lambda d: d["updatedAt"], reverse=True)[:50]
 
+    # ---- tasks ----
+    @staticmethod
+    def _start_of_day(ts):
+        d = time.localtime(ts / 1000)
+        return int(time.mktime((d.tm_year, d.tm_mon, d.tm_mday, 0, 0, 0, 0, 0, -1)) * 1000)
+
+    def tasks_list(self, flt="all"):
+        today = self._start_of_day(now_ms())
+        out = list(self.data["tasks"])
+        if flt == "inbox":
+            out = [t for t in out if not t["done"] and t.get("due") is None]
+        elif flt == "today":
+            out = [t for t in out if not t["done"] and t.get("due") is not None and self._start_of_day(t["due"]) <= today]
+        elif flt == "upcoming":
+            out = [t for t in out if not t["done"] and t.get("due") is not None and self._start_of_day(t["due"]) > today]
+        return sorted(out, key=lambda t: (t["done"], t["due"] if t.get("due") is not None else float("inf"), t["createdAt"]))
+
+    def tasks_for_day(self, day_ts):
+        day = self._start_of_day(day_ts)
+        out = [t for t in self.data["tasks"] if t.get("due") is not None and self._start_of_day(t["due"]) == day]
+        return sorted(out, key=lambda t: (t["done"], t["createdAt"]))
+
+    def task_get(self, tid):
+        return next((t for t in self.data["tasks"] if t["id"] == tid), None)
+
+    def task_create(self, body):
+        t = now_ms()
+        due = body.get("due")
+        task = {"id": uid(), "title": body.get("title", "New task"), "done": bool(body.get("done")),
+                "due": int(due) if due is not None else None, "docId": body.get("docId"),
+                "createdAt": t, "updatedAt": t}
+        self.data["tasks"].append(task)
+        self.persist()
+        return task
+
+    def task_update(self, tid, patch):
+        task = self.task_get(tid)
+        if not task:
+            return None
+        patch.pop("id", None)
+        if "due" in patch and patch["due"] is not None:
+            patch["due"] = int(patch["due"])
+        task.update(patch)
+        task["updatedAt"] = now_ms()
+        self.persist()
+        return task
+
+    def task_remove(self, tid):
+        before = len(self.data["tasks"])
+        self.data["tasks"] = [t for t in self.data["tasks"] if t["id"] != tid]
+        self.persist()
+        return len(self.data["tasks"]) < before
+
     def seed_if_empty(self):
         if self.data["spaces"]:
             return
-        personal = self.space_create({"name": "Personal", "emoji": "🏡", "color": "#4a6cf7"})
-        self.space_create({"name": "Work", "emoji": "💼", "color": "#f4a340"})
+        guide = self.space_create({"name": "How to use Vellum", "emoji": "👋", "color": "#3b82f6"})
+        self.space_create({"name": "Unsorted", "emoji": "", "color": "#8a8a8a"})
         self.doc_create({
-            "spaceId": personal["id"], "title": "Welcome to Vellum", "emoji": "👋",
+            "spaceId": guide["id"], "title": "Getting Started",
             "content": [
-                {"type": "h1", "text": "Welcome to Vellum"},
-                {"type": "text", "text": "Vellum is a beautiful, open-source document workspace — an homage to Craft."},
-                {"type": "callout", "text": "Type “/” on a new line to insert blocks: headings, to-dos, quotes, code, and more.", "color": "blue"},
-                {"type": "h2", "text": "Try it out"},
+                {"type": "h1", "text": "Getting Started"},
+                {"type": "text", "text": "Think of Vellum as your personal notebook — bring together Docs, Tasks and your Calendar in one calm, offline-first place."},
+                {"type": "callout", "text": "Press “/” on a new line to insert blocks: headings, to-dos, quotes, code and more."},
+                {"type": "h2", "text": "The basics"},
                 {"type": "todo", "text": "Create your first document", "checked": True},
-                {"type": "todo", "text": "Press “/” to open the block menu", "checked": False},
-                {"type": "todo", "text": "Toggle dark mode from the sidebar", "checked": False},
+                {"type": "todo", "text": "Try the block menu with “/”", "checked": False},
+                {"type": "todo", "text": "Open Tasks and Calendar from the sidebar", "checked": False},
                 {"type": "quote", "text": "Design is not just what it looks like. Design is how it works."},
-                {"type": "h2", "text": "Built for automation"},
-                {"type": "text", "text": "Every document here is reachable through a clean REST API, an MCP server, and a Claude skill."},
+            ],
+        })
+        self.doc_create({
+            "spaceId": guide["id"], "title": "Vellum Handbook",
+            "content": [
+                {"type": "h1", "text": "Vellum Handbook"},
+                {"type": "text", "text": "A quick overview of everything Vellum can do."},
+                {"type": "h2", "text": "Blocks & pages"},
+                {"type": "bullet", "text": "Every paragraph is a block you can restyle"},
+                {"type": "bullet", "text": "Headings build structure automatically"},
+                {"type": "h2", "text": "Tasks & scheduling"},
+                {"type": "text", "text": "Capture tasks in the Inbox, then schedule them for Today or Upcoming."},
+            ],
+        })
+        self.doc_create({
+            "spaceId": guide["id"], "title": "Tips & Shortcuts",
+            "content": [
+                {"type": "h1", "text": "Tips & Shortcuts"},
+                {"type": "text", "text": "Work faster with markdown-style shortcuts."},
+                {"type": "code", "text": "# → Heading 1\n- → Bullet list\n[] → To-do\n> → Quote"},
+                {"type": "callout", "text": "Everything is saved automatically and works offline."},
             ],
         })
 
@@ -333,6 +406,22 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/search" and method == "GET":
             term = (q.get("q") or "").strip()
             return self._ok(store.search(term, q.get("spaceId")) if term else [])
+
+        # /api/tasks
+        if parts[:2] == ["api", "tasks"]:
+            if len(parts) == 2:
+                if method == "GET":
+                    if q.get("day"):
+                        return self._ok(store.tasks_for_day(int(q["day"])))
+                    return self._ok(store.tasks_list(q.get("filter", "all")))
+                if method == "POST":
+                    return self._ok(store.task_create(body))
+            if len(parts) == 3:
+                tid = parts[2]
+                if method == "PATCH":
+                    t = store.task_update(tid, body); return self._ok(t) if t else self._nf()
+                if method == "DELETE":
+                    return self._ok({"removed": store.task_remove(tid)})
 
         return self._nf()
 

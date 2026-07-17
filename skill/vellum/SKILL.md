@@ -38,8 +38,15 @@ Always confirm the server is reachable first: `GET {VELLUM_URL}/api/health` → 
 | POST | `/api/documents/:id/blocks` | Append `{blocks: [...]}` |
 | DELETE | `/api/documents/:id` | Trash (add `?hard=true` to purge) |
 | GET | `/api/search?q=` | Full-text search |
+| GET | `/api/tasks?filter=` | Tasks by `inbox` / `today` / `upcoming` / `all` (or `?day=<ms>`) |
+| POST | `/api/tasks` | Create `{title, due?}` (`due` = epoch ms; omit for Inbox) |
+| PATCH | `/api/tasks/:id` | Update `{title?, done?, due?}` |
+| DELETE | `/api/tasks/:id` | Delete a task |
 
 All responses are `{ "ok": true, "data": ... }`.
+
+- **Task** — `{ id, title, done, due }`. `due` is epoch milliseconds, or `null` for the Inbox.
+  A task is "Today" when its `due` is today or earlier, "Upcoming" when later.
 
 ## Recipes
 
@@ -66,6 +73,13 @@ curl -s -X POST $VELLUM_URL/api/documents/<id>/blocks -H 'Content-Type: applicat
 **Find something**
 ```bash
 curl -s "$VELLUM_URL/api/search?q=roadmap"
+```
+
+**Add a task for today**
+```bash
+TODAY=$(node -e "const d=new Date();d.setHours(0,0,0,0);console.log(d.getTime())")
+curl -s -X POST $VELLUM_URL/api/tasks -H 'Content-Type: application/json' \
+  -d "{\"title\": \"Review the PR\", \"due\": $TODAY}"
 ```
 
 ## Guidance

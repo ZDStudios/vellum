@@ -28,13 +28,16 @@ document can do is reachable through a clean **REST API**, a bundled **MCP serve
 - **Block editor** — headings, to-dos, bulleted & numbered lists, quotes, callouts, code, dividers.
 - **Slash menu** — press `/` to insert any block; fuzzy-filter by name or keyword (`/todo`, `/task`, `/h1`).
 - **Markdown shortcuts** — `# `, `## `, `- `, `[] `, `> `, ` ``` ` auto-convert as you type.
-- **Spaces & documents** — organize work into spaces (Personal, Work, …) with emoji and accent colors.
-- **Craft-style design** — warm paper light theme + soft dark theme, rounded cards, soft shadows, serif quotes.
+- **Tasks** — a real task manager with **Inbox / Today / Upcoming / All** views, inline editing, and scheduling.
+- **Calendar** — a scrollable day-by-day agenda with *Today* highlighted; add tasks straight onto any day.
+- **Folders & documents** — organize work into folders, browse as cards (with live previews) or a list.
+- **Faithful Craft-style design** — clean line icons (no emoji chrome), calm dark + light themes, rounded
+  cards, soft shadows, elegant typography.
 - **Instant search** across every document's title and content.
 - **Offline-first web client** — works straight from disk using `localStorage`, and upgrades to the
   live API automatically when a server is running.
 - **Two interchangeable backends** — Node and Python speak the same REST API and share the same data file.
-- **Automation-ready** — REST API + MCP server + Claude skill, all documented below.
+- **Automation-ready** — REST API + MCP server (13 tools) + Claude skill, all documented below.
 
 ## 🚀 Quick start
 
@@ -83,6 +86,10 @@ Base URL: `http://localhost:4321/api` · every response is `{ "ok": true, "data"
 | `POST` | `/documents/:id/restore` | Restore from trash |
 | `DELETE` | `/documents/:id` | Trash (`?hard=true` to purge) |
 | `GET` | `/search?q=` | Full-text search |
+| `GET` | `/tasks?filter=` | List tasks (`inbox` / `today` / `upcoming` / `all`), or `?day=<ms>` for one day |
+| `POST` | `/tasks` | Create `{ title, due? }` (`due` = epoch ms; omit for Inbox) |
+| `PATCH` | `/tasks/:id` | Update `{ title?, done?, due? }` |
+| `DELETE` | `/tasks/:id` | Delete a task |
 
 **A block** is `{ "type": "...", "text": "...", "checked?": bool }`.
 Types: `text`, `h1`, `h2`, `h3`, `todo`, `bullet`, `numbered`, `quote`, `code`, `callout`, `divider`.
@@ -123,7 +130,8 @@ Add it to your MCP config (see [`.mcp.json`](.mcp.json)):
 ```
 
 Tools: `list_spaces`, `create_space`, `list_documents`, `get_document`, `create_document`,
-`update_document`, `append_blocks`, `search_documents`, `delete_document`.
+`update_document`, `append_blocks`, `search_documents`, `delete_document`,
+`list_tasks`, `create_task`, `update_task`, `delete_task`.
 
 Then just ask: *"Add a to-do to my Launch plan doc in Vellum"* and Claude will call the tools.
 
@@ -161,11 +169,12 @@ The palette lives in CSS variables at the top of [`web/styles.css`](web/styles.c
 
 ## 🛣️ Roadmap
 
+- [x] Tasks with Inbox / Today / Upcoming views
+- [x] Calendar agenda view
 - [ ] Nested / sub-page documents in the sidebar tree
 - [ ] Drag-to-reorder blocks
 - [ ] Inline formatting (bold / italic / links) toolbar
 - [ ] Image & file blocks with upload
-- [ ] Daily notes and calendar view
 - [ ] Real-time collaboration
 - [ ] Export to Markdown / PDF
 

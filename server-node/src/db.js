@@ -9,7 +9,7 @@ const DB_PATH = process.env.VELLUM_DB || path.join(process.cwd(), 'vellum-data.j
 const now = () => Date.now();
 const uid = () => crypto.randomBytes(9).toString('base64url');
 
-let data = { spaces: [], documents: [] };
+let data = { spaces: [], documents: [], tasks: [] };
 let saveTimer = null;
 
 function load() {
@@ -18,6 +18,7 @@ function load() {
       data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
       data.spaces ||= [];
       data.documents ||= [];
+      data.tasks ||= [];
     }
   } catch (e) {
     console.error('Failed to read data file, starting fresh:', e.message);
@@ -159,27 +160,89 @@ const Docs = {
   },
 };
 
+// ---- Tasks ----
+const startOfDay = (ts) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
+const Tasks = {
+  list({ filter = 'all' } = {}) {
+    const today = startOfDay(now());
+    let out = [...data.tasks];
+    if (filter === 'inbox') out = out.filter((t) => !t.done && t.due == null);
+    else if (filter === 'today') out = out.filter((t) => !t.done && t.due != null && startOfDay(t.due) <= today);
+    else if (filter === 'upcoming') out = out.filter((t) => !t.done && t.due != null && startOfDay(t.due) > today);
+    return out.sort((a, b) => (a.done - b.done) || ((a.due ?? Infinity) - (b.due ?? Infinity)) || a.createdAt - b.createdAt);
+  },
+  forDay(dayTs) {
+    const day = startOfDay(dayTs);
+    return data.tasks.filter((t) => t.due != null && startOfDay(t.due) === day)
+      .sort((a, b) => (a.done - b.done) || a.createdAt - b.createdAt);
+  },
+  get(id) { return data.tasks.find((t) => t.id === id) || null; },
+  create({ title = 'New task', due = null, done = false, docId = null } = {}) {
+    const t = now();
+    const task = { id: uid(), title, done: !!done, due: due != null ? Number(due) : null, docId, createdAt: t, updatedAt: t };
+    data.tasks.push(task);
+    persist();
+    return task;
+  },
+  update(id, patch) {
+    const task = Tasks.get(id);
+    if (!task) return null;
+    delete patch.id;
+    if ('due' in patch && patch.due != null) patch.due = Number(patch.due);
+    Object.assign(task, patch, { updatedAt: now() });
+    persist();
+    return task;
+  },
+  remove(id) {
+    const before = data.tasks.length;
+    data.tasks = data.tasks.filter((t) => t.id !== id);
+    persist();
+    return data.tasks.length < before;
+  },
+};
+
 function seedIfEmpty() {
   if (data.spaces.length > 0) return;
-  const personal = Spaces.create({ name: 'Personal', emoji: '🏡', color: '#4a6cf7' });
-  Spaces.create({ name: 'Work', emoji: '💼', color: '#f4a340' });
+  const guide = Spaces.create({ name: 'How to use Vellum', emoji: '👋', color: '#3b82f6' });
+  Spaces.create({ name: 'Unsorted', emoji: '', color: '#8a8a8a' });
   Docs.create({
-    spaceId: personal.id,
-    title: 'Welcome to Vellum',
-    emoji: '👋',
+    spaceId: guide.id,
+    title: 'Getting Started',
     content: [
-      { type: 'h1', text: 'Welcome to Vellum' },
-      { type: 'text', text: 'Vellum is a beautiful, open-source document workspace — an homage to Craft.' },
-      { type: 'callout', text: 'Type “/” on a new line to insert blocks: headings, to-dos, quotes, code, and more.', color: 'blue' },
-      { type: 'h2', text: 'Try it out' },
+      { type: 'h1', text: 'Getting Started' },
+      { type: 'text', text: 'Think of Vellum as your personal notebook — bring together Docs, Tasks and your Calendar in one calm, offline-first place.' },
+      { type: 'callout', text: 'Press “/” on a new line to insert blocks: headings, to-dos, quotes, code and more.' },
+      { type: 'h2', text: 'The basics' },
       { type: 'todo', text: 'Create your first document', checked: true },
-      { type: 'todo', text: 'Press “/” to open the block menu', checked: false },
-      { type: 'todo', text: 'Toggle dark mode from the sidebar', checked: false },
+      { type: 'todo', text: 'Try the block menu with “/”', checked: false },
+      { type: 'todo', text: 'Open Tasks and Calendar from the sidebar', checked: false },
       { type: 'quote', text: 'Design is not just what it looks like. Design is how it works.' },
-      { type: 'h2', text: 'Built for automation' },
-      { type: 'text', text: 'Every document here is reachable through a clean REST API, an MCP server, and a Claude skill.' },
+    ],
+  });
+  Docs.create({
+    spaceId: guide.id,
+    title: 'Vellum Handbook',
+    content: [
+      { type: 'h1', text: 'Vellum Handbook' },
+      { type: 'text', text: 'A quick overview of everything Vellum can do.' },
+      { type: 'h2', text: 'Blocks & pages' },
+      { type: 'bullet', text: 'Every paragraph is a block you can restyle' },
+      { type: 'bullet', text: 'Headings build structure automatically' },
+      { type: 'h2', text: 'Tasks & scheduling' },
+      { type: 'text', text: 'Capture tasks in the Inbox, then schedule them for Today or Upcoming.' },
+    ],
+  });
+  Docs.create({
+    spaceId: guide.id,
+    title: 'Tips & Shortcuts',
+    content: [
+      { type: 'h1', text: 'Tips & Shortcuts' },
+      { type: 'text', text: 'Work faster with markdown-style shortcuts.' },
+      { type: 'code', text: '# → Heading 1\n- → Bullet list\n[] → To-do\n> → Quote' },
+      { type: 'callout', text: 'Everything is saved automatically and works offline.' },
     ],
   });
 }
 
-module.exports = { Spaces, Docs, uid, now, normalizeBlock, seedIfEmpty, BLOCK_TYPES, DB_PATH };
+module.exports = { Spaces, Docs, Tasks, uid, now, normalizeBlock, seedIfEmpty, BLOCK_TYPES, DB_PATH };

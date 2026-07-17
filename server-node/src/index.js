@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
-const { Spaces, Docs, seedIfEmpty } = require('./db');
+const { Spaces, Docs, Tasks, seedIfEmpty } = require('./db');
 
 seedIfEmpty();
 
@@ -69,6 +69,14 @@ route('GET', '/api/search', (_p, q, _b, res) => {
   const term = String(q.q || '').trim();
   ok(res, term ? Docs.search(term, { spaceId: q.spaceId }) : []);
 });
+
+route('GET', '/api/tasks', (_p, q, _b, res) => {
+  if (q.day) return ok(res, Tasks.forDay(Number(q.day)));
+  ok(res, Tasks.list({ filter: q.filter || 'all' }));
+});
+route('POST', '/api/tasks', (_p, _q, b, res) => ok(res, Tasks.create(b)));
+route('PATCH', '/api/tasks/:id', (p, _q, b, res) => { const t = Tasks.update(p.id, b); t ? ok(res, t) : notFound(res); });
+route('DELETE', '/api/tasks/:id', (p, _q, _b, res) => ok(res, { removed: Tasks.remove(p.id) }));
 
 function match(routeParts, pathParts) {
   if (routeParts.length !== pathParts.length) return null;
