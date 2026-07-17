@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vellum — a beautiful open document workspace</title>
+  <meta name="description" content="Vellum: an open-source, craft-inspired block document workspace with a REST API, MCP server, and Claude skill." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%234a6cf7'/><text x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>V</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="logo">V</div>
+        <span>Vellum</span>
+        <span class="spacer"></span>
+        <span id="backend-dot" style="width:8px;height:8px;border-radius:50%;background:#a3a29d;" title="status"></span>
+      </div>
+      <div class="search">
+        <span>🔍</span>
+        <input id="search-input" placeholder="Search…" />
+      </div>
+      <div class="nav" id="nav"></div>
+      <div class="sidebar-footer">
+        <button class="icon-btn" id="new-doc-btn" title="New document">✎</button>
+        <button class="icon-btn" id="theme-btn" title="Toggle theme">🌓</button>
+        <span class="spacer" style="flex:1"></span>
+        <button class="icon-btn" id="toggle-sidebar" title="Collapse sidebar">⟨</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <button class="icon-btn" onclick="document.getElementById('sidebar').classList.toggle('collapsed')" title="Toggle sidebar">☰</button>
+        <div class="crumb" id="crumb">Vellum</div>
+        <span class="spacer"></span>
+      </div>
+      <div class="doc-scroll" id="main-scroll"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

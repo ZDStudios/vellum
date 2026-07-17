@@ -1,0 +1,19 @@
+# Vellum — one command to run the whole thing: `docker compose up`
+# Default runtime is Node. To use the Python runtime instead, swap `dockerfile` below.
+services:
+  vellum:
+    build:
+      context: .
+      dockerfile: Dockerfile        # use Dockerfile.python for the Python runtime
+    container_name: vellum
+    ports:
+      - "4321:4321"
+    volumes:
+      - vellum-data:/data           # keeps your documents across restarts
+    environment:
+      - PORT=4321
+      - VELLUM_DB=/data/vellum-data.json
+    restart: unless-stopped
+
+volumes:
+  vellum-data:

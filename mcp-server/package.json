@@ -1,0 +1,13 @@
+{
+  "name": "vellum-mcp",
+  "version": "1.0.0",
+  "description": "Zero-dependency MCP server exposing a Vellum workspace as Model Context Protocol tools",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": { "vellum-mcp": "index.js" },
+  "main": "index.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

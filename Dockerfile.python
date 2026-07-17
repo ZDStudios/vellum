@@ -1,0 +1,14 @@
+# Vellum — Python runtime image (stdlib only, no pip installs).
+FROM python:3.12-alpine
+
+WORKDIR /app
+
+COPY server-python ./server-python
+COPY web ./web
+
+ENV PORT=4321
+ENV VELLUM_DB=/data/vellum-data.json
+VOLUME ["/data"]
+EXPOSE 4321
+
+CMD ["python", "server-python/main.py"]

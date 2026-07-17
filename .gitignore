@@ -1,0 +1,25 @@
+# Data
+vellum-data.json
+vellum-data.json.tmp
+*.db
+*.db-*
+data/
+
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

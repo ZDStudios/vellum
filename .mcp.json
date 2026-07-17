@@ -1,0 +1,12 @@
+{
+  "$comment": "Drop this into your Claude Code / Claude Desktop config to expose Vellum as MCP tools. Adjust the path to index.js and VELLUM_URL as needed.",
+  "mcpServers": {
+    "vellum": {
+      "command": "node",
+      "args": ["./mcp-server/index.js"],
+      "env": {
+        "VELLUM_URL": "http://localhost:4321"
+      }
+    }
+  }
+}
