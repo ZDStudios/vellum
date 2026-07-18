@@ -52,6 +52,11 @@
     'clock': '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     'send': '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
     'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    'star': '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+    'external': '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/>',
+    'braces': '<path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1"/><path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1"/>',
+    'folder-plus': '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/>',
+    'file-down': '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>',
   };
   const FILL = new Set(['more']);
   const svgWrap = (inner, fill) => `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor" stroke="none"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'}>${inner}</svg>`;
@@ -124,6 +129,7 @@
     async updateDoc(id, patch) { const d = this.load(); const doc = d.documents.find((x) => x.id === id); if (!doc) return null; Object.assign(doc, patch, { updatedAt: Date.now() }); this.save(d); return doc; },
     async deleteDoc(id) { const d = this.load(); const doc = d.documents.find((x) => x.id === id); if (doc) doc.deleted = true; this.save(d); },
     async search(q) { q = q.toLowerCase(); return this.load().documents.filter((x) => !x.deleted && (x.title.toLowerCase().includes(q) || JSON.stringify(x.content).toLowerCase().includes(q))); },
+    async listStarred() { return this.load().documents.filter((x) => !x.deleted && x.starred); },
     async listTasks(filter) { const t = this.load().tasks; const today = startOfDay(Date.now()); let o = [...t]; if (filter === 'inbox') o = o.filter((x) => !x.done && x.due == null); else if (filter === 'today') o = o.filter((x) => !x.done && x.due != null && startOfDay(x.due) <= today); else if (filter === 'upcoming') o = o.filter((x) => !x.done && x.due != null && startOfDay(x.due) > today); return o.sort((a, b) => (a.done - b.done) || ((a.due ?? Infinity) - (b.due ?? Infinity)) || a.createdAt - b.createdAt); },
     async createTask(p) { const d = this.load(); const task = { id: uid(), title: p.title || 'New task', done: false, due: p.due ?? null, docId: null, createdAt: Date.now(), updatedAt: Date.now() }; d.tasks.push(task); this.save(d); return task; },
     async updateTask(id, patch) { const d = this.load(); const t = d.tasks.find((x) => x.id === id); if (!t) return null; Object.assign(t, patch, { updatedAt: Date.now() }); this.save(d); return t; },
@@ -140,6 +146,7 @@
     async updateDoc(id, p) { return this.req('PATCH', '/documents/' + id, p); },
     async deleteDoc(id) { return this.req('DELETE', '/documents/' + id); },
     async search(q) { return this.req('GET', '/search?q=' + encodeURIComponent(q)); },
+    async listStarred() { return this.req('GET', '/documents?starred=true'); },
     async listTasks(filter) { return this.req('GET', '/tasks?filter=' + (filter || 'all')); },
     async createTask(p) { return this.req('POST', '/tasks', p); },
     async updateTask(id, p) { return this.req('PATCH', '/tasks/' + id, p); },
@@ -148,7 +155,7 @@
   let Store = LocalStore;
 
   // ================= State =================
-  const state = { view: 'docs', spaces: [], folderId: null, docId: null, doc: null, docsView: 'grid', taskTab: 'inbox', showPrevDays: false, backend: false };
+  const state = { view: 'docs', spaces: [], folderId: null, docId: null, doc: null, tag: null, docsView: 'grid', taskTab: 'inbox', showPrevDays: false, backend: false };
 
   const BLOCKS = [
     { type: 'text', icon: 'text', t: 'Text', d: 'Plain paragraph', ph: "Type '/' for commands", kw: 'text paragraph body plain' },
@@ -174,12 +181,83 @@
   function initTheme() { const s = localStorage.getItem('vellum:theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'); document.documentElement.dataset.theme = s; }
   function toggleTheme() { const n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = n; localStorage.setItem('vellum:theme', n); renderTopbar(); }
 
+  // ================= Popover menu =================
+  function openMenu(e, items) {
+    e.stopPropagation();
+    $('.menu-pop')?.remove();
+    const m = el('div', 'menu-pop');
+    items.forEach((it) => {
+      if (it.sep) { m.appendChild(el('div', 'sep')); return; }
+      const row = el('div', 'mi', `${it.icon ? icon(it.icon) : ''}<span>${escapeHtml(it.label)}</span>`);
+      row.onclick = (ev) => { ev.stopPropagation(); m.remove(); it.onClick(); };
+      m.appendChild(row);
+    });
+    document.body.appendChild(m);
+    const r = e.currentTarget.getBoundingClientRect();
+    m.style.left = Math.min(r.left, innerWidth - 220) + 'px';
+    m.style.top = (r.bottom + 6) + 'px';
+    setTimeout(() => document.addEventListener('click', function h(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('click', h); } }), 0);
+  }
+
+  // ================= Export =================
+  function download(name, text, mime = 'text/plain') {
+    const blob = new Blob([text], { type: mime });
+    const a = el('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function docToMarkdown(doc) {
+    const lines = [`# ${doc.emoji ? doc.emoji + ' ' : ''}${doc.title || 'Untitled'}`, ''];
+    let n = 1;
+    for (const b of doc.content || []) {
+      const t = b.text || '';
+      switch (b.type) {
+        case 'h1': lines.push('# ' + t); n = 1; break;
+        case 'h2': lines.push('## ' + t); n = 1; break;
+        case 'h3': lines.push('### ' + t); n = 1; break;
+        case 'todo': lines.push(`- [${b.checked ? 'x' : ' '}] ${t}`); break;
+        case 'bullet': lines.push('- ' + t); break;
+        case 'numbered': lines.push(`${n++}. ${t}`); break;
+        case 'quote': lines.push('> ' + t); break;
+        case 'callout': lines.push('> 💡 ' + t); break;
+        case 'code': lines.push('```', t, '```'); break;
+        case 'divider': lines.push('---'); break;
+        default: lines.push(t); n = 1;
+      }
+      if (b.type !== 'numbered') lines.push('');
+    }
+    return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  }
+  const slug = (s) => (s || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
+  function exportDocMd(doc) { download(slug(doc.title) + '.md', docToMarkdown(doc), 'text/markdown'); toast('Exported ' + slug(doc.title) + '.md'); }
+  async function exportWorkspace() {
+    const spaces = await Store.listSpaces();
+    const documents = await Store.listDocs();
+    const tasks = await Store.listTasks('all');
+    download('vellum-workspace.json', JSON.stringify({ spaces, documents, tasks, exportedAt: new Date().toISOString() }, null, 2), 'application/json');
+    toast('Exported workspace JSON');
+  }
+
+  // ================= Tag view =================
+  async function showTag(tag) {
+    state.view = 'tag'; state.tag = tag; state.docId = null; state.doc = null;
+    renderSidebar();
+    const all = await Store.listDocs();
+    const docs = all.filter((d) => (d.tags || []).includes(tag));
+    const c = $('#content'); c.innerHTML = '';
+    c.appendChild(viewHead(icon('tag'), '#' + tag, ''));
+    const wrap = el('div', 'docs-wrap');
+    if (!docs.length) wrap.appendChild(el('div', 'empty-state', `<div class="e-ico">${icon('tag')}</div><div class="e-text">No documents tagged “${escapeHtml(tag)}”</div>`));
+    else { const grid = el('div', 'card-grid'); docs.forEach((d) => grid.appendChild(docCard(d))); wrap.appendChild(grid); }
+    c.appendChild(wrap);
+  }
+
   // ================= Sidebar =================
   async function renderSidebar() {
     state.spaces = await Store.listSpaces();
     const sb = $('#sidebar');
     const navItem = (ic, label, active, opts = {}) => {
-      const it = el('div', 'sb-item' + (active ? ' active' : ''));
+      const it = el('div', 'sb-item' + (active ? ' active' : '') + (opts.child ? ' child' : ''));
       const em = opts.emoji ? `<span class="emoji">${opts.emoji}</span>` : icon(ic);
       it.innerHTML = `${em}<span class="label">${escapeHtml(label)}</span>${opts.trail || ''}`;
       if (opts.onClick) it.onclick = opts.onClick;
@@ -206,14 +284,20 @@
     scroll.appendChild(navItem('files', 'All Docs', state.view === 'docs' && state.folderId == null, { onClick: () => { state.folderId = null; go('docs'); } }));
     scroll.appendChild(navItem('circle-check', 'Tasks', state.view === 'tasks', { onClick: () => go('tasks') }));
     scroll.appendChild(navItem('calendar', 'Calendar', state.view === 'calendar', { onClick: () => go('calendar') }));
-    scroll.appendChild(el('div', 'sb-gap'));
-    scroll.appendChild(navItem('cloud', 'Imagine', false, { onClick: () => toast('Imagine — AI generation is coming soon') }));
-    scroll.appendChild(navItem('users', 'Shared with Me', false, { onClick: () => toast('Sharing is coming soon') }));
+    const [starred, allDocs] = await Promise.all([Store.listStarred(), Store.listDocs()]);
 
+    // Starred
     scroll.appendChild(el('div', 'sb-label', 'Starred'));
-    scroll.appendChild(el('div', 'sb-placeholder', 'Star Docs to keep them close'));
+    if (starred.length) {
+      starred.forEach((d) => {
+        scroll.appendChild(navItem('star', d.title || 'Untitled', state.docId === d.id, { child: true, emoji: d.emoji || null, onClick: () => openDoc(d.id) }));
+      });
+    } else {
+      scroll.appendChild(el('div', 'sb-placeholder', 'Star Docs to keep them close'));
+    }
 
-    const folderLabel = el('div', 'sb-label', `Folders<span class="spacer"></span><span class="add">${icon('plus')}</span>`);
+    // Folders
+    const folderLabel = el('div', 'sb-label', `Folders<span class="spacer"></span><span class="add" title="New folder">${icon('plus')}</span>`);
     folderLabel.querySelector('.add').onclick = async (e) => { e.stopPropagation(); const s = await Store.createSpace({ name: 'New Folder' }); state.folderId = s.id; go('docs'); };
     scroll.appendChild(folderLabel);
     for (const f of state.spaces) {
@@ -227,13 +311,31 @@
       scroll.appendChild(it);
     }
 
+    // Tags
+    const tagCounts = {};
+    allDocs.forEach((d) => (d.tags || []).forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
+    const tags = Object.keys(tagCounts).sort();
     scroll.appendChild(el('div', 'sb-label', 'Tags'));
-    scroll.appendChild(el('div', 'sb-placeholder', 'Pin your key tags for quick access'));
+    if (tags.length) {
+      tags.forEach((t) => scroll.appendChild(navItem('tag', t, state.view === 'tag' && state.tag === t, {
+        child: true, trail: `<span class="trail" style="opacity:.6">${tagCounts[t]}</span>`, onClick: () => showTag(t),
+      })));
+    } else {
+      scroll.appendChild(el('div', 'sb-placeholder', 'Add tags to a document to see them here'));
+    }
 
     sb.appendChild(scroll);
 
+    // Footer — real actions
     const footer = el('div', 'sb-footer');
-    ['monitor', 'download', 'users'].forEach((n) => { const b = el('button', 'fbtn', icon(n)); b.onclick = () => toast('Coming soon'); footer.appendChild(b); });
+    const expBtn = el('button', 'fbtn', icon('file-down')); expBtn.title = 'Export';
+    expBtn.onclick = (e) => openMenu(e, [
+      { icon: 'file-down', label: 'Export current doc (Markdown)', onClick: () => (state.doc ? exportDocMd(state.doc) : toast('Open a document first')) },
+      { icon: 'braces', label: 'Export workspace (JSON)', onClick: exportWorkspace },
+    ]);
+    const ghBtn = el('button', 'fbtn', icon('external')); ghBtn.title = 'View source on GitHub';
+    ghBtn.onclick = () => window.open('https://github.com/ZDStudios/vellum', '_blank', 'noopener');
+    footer.append(expBtn, ghBtn);
     sb.appendChild(footer);
   }
 
@@ -247,8 +349,8 @@
     tb.appendChild(search);
     const right = el('div'); right.style.cssText = 'display:flex;align-items:center;gap:2px;flex:0 0 auto';
     const themeIcon = document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon';
-    [['bell', () => toast('No new notifications')], [themeIcon, toggleTheme], ['help', () => toast('Vellum — open source. See the README.')]].forEach(([n, fn]) => {
-      const b = el('button', 'tb-btn', icon(n)); b.onclick = fn; right.appendChild(b);
+    [[themeIcon, toggleTheme, 'Toggle theme'], ['help', () => window.open('https://github.com/ZDStudios/vellum', '_blank', 'noopener'), 'Help & source']].forEach(([n, fn, title]) => {
+      const b = el('button', 'tb-btn', icon(n)); b.onclick = fn; b.title = title; right.appendChild(b);
     });
     tb.appendChild(right);
     const si = $('#search-input');
@@ -267,7 +369,7 @@
   }, 220);
 
   // ================= Router =================
-  function go(view) { state.view = view; state.docId = null; state.doc = null; renderSidebar(); renderView(); }
+  function go(view) { state.view = view; state.docId = null; state.doc = null; state.tag = null; renderSidebar(); renderView(); }
   async function newDocument() { const sid = state.folderId || (state.spaces[0] && state.spaces[0].id); const d = await Store.createDoc({ spaceId: sid, title: 'Untitled' }); openDoc(d.id); }
   async function openDoc(id) { state.doc = await Store.getDoc(id); state.docId = id; if (state.doc) state.folderId = state.doc.spaceId; state.view = 'doc'; renderSidebar(); renderView(); }
 
@@ -276,6 +378,7 @@
     if (state.view === 'doc' && state.doc) return renderDoc(c);
     if (state.view === 'tasks') return renderTasks(c);
     if (state.view === 'calendar') return renderCalendar(c);
+    if (state.view === 'tag' && state.tag) return showTag(state.tag);
     return renderDocs(c);
   }
 
@@ -302,7 +405,13 @@
     gridBtn.onclick = () => { state.docsView = 'grid'; renderView(); };
     listBtn.onclick = () => { state.docsView = 'list'; renderView(); };
     seg.append(gridBtn, listBtn);
-    const more = el('button', 'hbtn', icon('more')); more.onclick = () => toast('More options');
+    const more = el('button', 'hbtn', icon('more'));
+    more.onclick = (e) => openMenu(e, [
+      { icon: 'file-pen', label: 'New document', onClick: newDocument },
+      { icon: 'folder-plus', label: 'New folder', onClick: async () => { const s = await Store.createSpace({ name: 'New Folder' }); state.folderId = s.id; go('docs'); } },
+      { sep: true },
+      { icon: 'braces', label: 'Export workspace (JSON)', onClick: exportWorkspace },
+    ]);
     actions.append(seg, more);
     c.appendChild(head);
 
@@ -333,6 +442,10 @@
     head.innerHTML = `<div class="c-title">${d.emoji ? `<span>${d.emoji}</span>` : icon('files')}${escapeHtml(d.title || 'Untitled')}</div>
       <div class="c-meta">${icon('folder')}${escapeHtml(folder ? folder.name : 'Unsorted')} · Updated ${relTime(d.updatedAt)}</div>`;
     card.appendChild(head);
+    const star = el('button', 'card-star' + (d.starred ? ' on' : ''), icon('star'));
+    star.title = d.starred ? 'Unstar' : 'Star';
+    star.onclick = async (e) => { e.stopPropagation(); await Store.updateDoc(d.id, { starred: !d.starred }); renderSidebar(); renderView(); };
+    card.appendChild(star);
     const prev = el('div', 'c-preview');
     prev.innerHTML = (d.content || []).slice(0, 12).map((b) => {
       const txt = escapeHtml((b.text || '').slice(0, 90));
@@ -350,7 +463,17 @@
 
   // ================= Tasks =================
   async function renderTasks(c) {
-    const head = viewHead(() => focusAddTask(), 'Tasks', `<button class="hbtn">${icon('sliders')}</button>`);
+    const head = viewHead(() => focusAddTask(), 'Tasks', '');
+    const slid = el('button', 'hbtn', icon('sliders')); slid.title = 'Task options';
+    slid.onclick = (e) => openMenu(e, [
+      { icon: 'check', label: 'Clear completed tasks', onClick: async () => {
+        const done = (await Store.listTasks('all')).filter((t) => t.done);
+        for (const t of done) await Store.deleteTask(t.id);
+        toast(done.length ? `Cleared ${done.length} task${done.length === 1 ? '' : 's'}` : 'No completed tasks');
+        renderView();
+      } },
+    ]);
+    head.querySelector('.actions').appendChild(slid);
     c.appendChild(head);
 
     const tabs = el('div', 'tabs');
@@ -404,7 +527,13 @@
 
   // ================= Calendar =================
   async function renderCalendar(c) {
-    const head = viewHead(() => go('tasks'), 'Calendar', `<button class="hbtn">${icon('more')}</button>`);
+    const head = viewHead(() => go('tasks'), 'Calendar', '');
+    const more = el('button', 'hbtn', icon('more')); more.title = 'Calendar options';
+    more.onclick = (e) => openMenu(e, [
+      { icon: 'sun', label: 'Jump to today', onClick: () => $('.day-card.today')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
+      { icon: state.showPrevDays ? 'chevron-down' : 'chevron-up', label: state.showPrevDays ? 'Hide previous days' : 'Show previous days', onClick: () => { state.showPrevDays = !state.showPrevDays; renderView(); } },
+    ]);
+    head.querySelector('.actions').appendChild(more);
     c.appendChild(head);
     const body = el('div', 'cal-body');
     const link = el('div', 'cal-link', `${icon(state.showPrevDays ? 'chevron-down' : 'chevron-up')}${state.showPrevDays ? 'Hide Previous Days' : 'Show Previous Days'}`);
@@ -463,14 +592,45 @@
     title.oninput = () => { doc.title = title.textContent.trim() || 'Untitled'; saveDoc(); debounce(renderSidebar, 500)(); };
     title.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); focusBlock(0, true); } };
     wrap.appendChild(title);
-    wrap.appendChild(el('div', 'doc-meta', `${icon('folder')}${escapeHtml(folder ? folder.name : 'Unsorted')} · ${icon('clock')}Edited ${relTime(doc.updatedAt)}`));
+
+    const meta = el('div', 'doc-meta', `${icon('folder')}${escapeHtml(folder ? folder.name : 'Unsorted')} · ${icon('clock')}Edited ${relTime(doc.updatedAt)}`);
+    const star = el('button', 'meta-star' + (doc.starred ? ' on' : ''), `${icon('star')}${doc.starred ? 'Starred' : 'Star'}`);
+    star.onclick = async () => { doc.starred = !doc.starred; await Store.updateDoc(doc.id, { starred: doc.starred }); renderView(); renderSidebar(); };
+    meta.appendChild(star);
+    wrap.appendChild(meta);
+    wrap.appendChild(renderTagsRow(doc));
 
     const blocks = el('div', 'blocks'); blocks.id = 'blocks';
     if (!doc.content.length) doc.content.push({ id: uid(), type: 'text', text: '' });
     doc.content.forEach((b, i) => blocks.appendChild(renderBlock(b, i)));
     wrap.appendChild(blocks);
     c.appendChild(wrap);
-    setTimeout(() => title.focus(), 0);
+    if (!doc.title || doc.title === 'Untitled') setTimeout(() => title.focus(), 0);
+  }
+
+  function renderTagsRow(doc) {
+    const row = el('div', 'doc-tags');
+    (doc.tags || []).forEach((t) => {
+      const chip = el('span', 'tag-chip', `#${escapeHtml(t)}<span class="rm" title="Remove">${icon('x')}</span>`);
+      chip.querySelector('.rm').onclick = async () => { doc.tags = (doc.tags || []).filter((x) => x !== t); await Store.updateDoc(doc.id, { tags: doc.tags }); renderView(); renderSidebar(); };
+      row.appendChild(chip);
+    });
+    const add = el('button', 'tag-add', `${icon('plus')}Add tag`);
+    add.onclick = () => {
+      const inp = el('input', 'tag-input'); inp.placeholder = 'tag name…';
+      add.replaceWith(inp); inp.focus();
+      let done = false;
+      const commit = async (save) => {
+        if (done) return; done = true;
+        const v = inp.value.trim().replace(/^#/, '');
+        if (save && v && !(doc.tags || []).includes(v)) { doc.tags = [...(doc.tags || []), v]; await Store.updateDoc(doc.id, { tags: doc.tags }); renderSidebar(); }
+        renderView();
+      };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(true); } else if (e.key === 'Escape') commit(false); };
+      inp.onblur = () => commit(true);
+    };
+    row.appendChild(add);
+    return row;
   }
 
   function renderBlock(b, index) {

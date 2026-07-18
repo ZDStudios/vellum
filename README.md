@@ -33,6 +33,8 @@ document can do is reachable through a clean **REST API**, a bundled **MCP serve
 - **AI Assistant** — a built-in Claude-powered assistant that writes, edits and summarises with your
   current document as context. The API key stays server-side.
 - **Folders & documents** — organize work into folders, browse as cards (with live previews) or a list.
+- **Starring & tags** — star docs to pin them to the sidebar; tag them and click any tag to filter.
+- **Export** — any document as Markdown, or the whole workspace as JSON.
 - **Faithful Craft-style design** — clean line icons (no emoji chrome), calm dark + light themes, rounded
   cards, soft shadows, elegant typography.
 - **Instant search** across every document's title and content.
