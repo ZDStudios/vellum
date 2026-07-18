@@ -50,6 +50,8 @@
     'minus': '<path d="M5 12h14"/>',
     'inbox-empty': '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
     'clock': '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    'send': '<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
+    'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   };
   const FILL = new Set(['more']);
   const svgWrap = (inner, fill) => `<svg viewBox="0 0 24 24" ${fill ? 'fill="currentColor" stroke="none"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'}>${inner}</svg>`;
@@ -294,7 +296,6 @@
 
     const head = viewHead(newDocument, title, '');
     const actions = head.querySelector('.actions');
-    const plus = el('button', 'plus-pill', `${icon('crown')} Get Vellum Plus`); plus.onclick = () => toast('Vellum is 100% free and open source ✦');
     const seg = el('div', 'seg');
     const gridBtn = el('button', 'hbtn' + (state.docsView === 'grid' ? ' active' : ''), icon('grid'));
     const listBtn = el('button', 'hbtn' + (state.docsView === 'list' ? ' active' : ''), icon('list'));
@@ -302,7 +303,7 @@
     listBtn.onclick = () => { state.docsView = 'list'; renderView(); };
     seg.append(gridBtn, listBtn);
     const more = el('button', 'hbtn', icon('more')); more.onclick = () => toast('More options');
-    actions.append(plus, seg, more);
+    actions.append(seg, more);
     c.appendChild(head);
 
     const wrap = el('div', 'docs-wrap');
@@ -570,11 +571,90 @@
     setTimeout(() => document.addEventListener('click', function h(ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', h); } }), 0);
   }
 
+  // ================= AI Assistant panel =================
+  const assistant = { open: false, history: [], busy: false, el: null };
+
+  function toggleAssistant() { assistant.open ? closeAssistant() : openAssistant(); }
+  function closeAssistant() { assistant.open = false; assistant.el?.remove(); assistant.el = null; $('#assistant').classList.remove('hidden'); }
+
+  function openAssistant() {
+    assistant.open = true;
+    $('#assistant').classList.add('hidden');
+    const panel = el('div', 'ap');
+    panel.innerHTML = `
+      <div class="ap-head">
+        <span class="orb"></span>
+        <div style="flex:1"><div class="t">Assistant</div><div class="sub">${state.backend ? 'Powered by Claude' : 'Needs the Vellum server'}</div></div>
+        <button class="x" title="Close">${icon('x')}</button>
+      </div>
+      <div class="ap-msgs" id="ap-msgs"></div>
+      <div class="ap-input">
+        <textarea id="ap-text" rows="1" placeholder="Ask anything, or ask about this doc…"></textarea>
+        <button class="ap-send" id="ap-send" title="Send">${icon('send')}</button>
+      </div>`;
+    $('.main').appendChild(panel);
+    assistant.el = panel;
+    panel.querySelector('.x').onclick = closeAssistant;
+    const text = panel.querySelector('#ap-text');
+    const send = panel.querySelector('#ap-send');
+    text.oninput = () => { text.style.height = 'auto'; text.style.height = Math.min(text.scrollHeight, 120) + 'px'; };
+    text.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } };
+    send.onclick = doSend;
+    drawAssistant();
+    setTimeout(() => text.focus(), 30);
+  }
+
+  function drawAssistant() {
+    const box = $('#ap-msgs'); if (!box) return;
+    box.innerHTML = '';
+    if (!assistant.history.length) {
+      const suggestions = state.view === 'doc'
+        ? ['Summarise this document', 'Improve the writing', 'Suggest 3 next steps']
+        : ['Draft a project brief', 'Give me a daily standup template', 'Brainstorm blog post ideas'];
+      const empty = el('div', 'ap-empty');
+      empty.innerHTML = `<div class="orb-lg"></div><div class="h">How can I help?</div><div style="font-size:13px">Ask me to write, edit, summarise or brainstorm.</div>`;
+      const chips = el('div', 'ap-chips'); chips.className = 'chips';
+      suggestions.forEach((s) => { const c = el('button', 'ap-chip', escapeHtml(s)); c.onclick = () => { $('#ap-text').value = s; doSend(); }; chips.appendChild(c); });
+      empty.appendChild(chips);
+      box.appendChild(empty);
+    } else {
+      assistant.history.forEach((m) => box.appendChild(el('div', 'chat-msg ' + m.role + (m.error ? ' error' : ''), escapeHtml(m.content))));
+    }
+    if (assistant.busy) { const t = el('div', 'ap-typing', '<span></span><span></span><span></span>'); box.appendChild(t); }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function doSend() {
+    if (assistant.busy) return;
+    const text = $('#ap-text');
+    const prompt = text.value.trim();
+    if (!prompt) return;
+    if (!state.backend) {
+      assistant.history.push({ role: 'user', content: prompt });
+      assistant.history.push({ role: 'assistant', error: true, content: 'The AI assistant needs the Vellum server running (node / python / docker) with an ANTHROPIC_API_KEY set. It’s unavailable in offline mode.' });
+      text.value = ''; text.style.height = 'auto'; drawAssistant(); return;
+    }
+    assistant.history.push({ role: 'user', content: prompt });
+    text.value = ''; text.style.height = 'auto';
+    assistant.busy = true; drawAssistant();
+    try {
+      const payload = { prompt, history: assistant.history.slice(0, -1).map((m) => ({ role: m.role, content: m.content })) };
+      if (state.view === 'doc' && state.doc) payload.doc = { title: state.doc.title, content: state.doc.content };
+      const r = await fetch(API + '/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await r.json();
+      const data = j.data || {};
+      assistant.history.push({ role: 'assistant', content: data.reply || '(no response)', error: !!data.error });
+    } catch (e) {
+      assistant.history.push({ role: 'assistant', content: 'Could not reach the assistant: ' + e.message, error: true });
+    }
+    assistant.busy = false; drawAssistant();
+  }
+
   // ================= Boot =================
   async function boot() {
     initTheme();
     try { const r = await fetch(API + '/health', { signal: AbortSignal.timeout(1200) }); if (r.ok) { Store = Remote; state.backend = true; } } catch { Store = LocalStore; }
-    $('#assistant').onclick = () => toast('AI Assistant is coming soon');
+    $('#assistant').onclick = toggleAssistant;
     renderTopbar();
     await renderSidebar();
     renderView();

@@ -12,6 +12,8 @@ import secrets
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -285,6 +287,64 @@ store = Store()
 store.seed_if_empty()
 
 
+# ---- AI Assistant (raw HTTP to the Anthropic Messages API; key stays server-side) ----
+AI_MODEL = os.environ.get("VELLUM_AI_MODEL", "claude-opus-4-8")
+ASSISTANT_SYSTEM = (
+    "You are the Vellum Assistant, a helpful writing and productivity companion built into "
+    "Vellum — a clean, open-source document workspace with docs, tasks and a calendar. "
+    "Help the user write, edit, rewrite, summarise, outline, brainstorm and answer questions. "
+    "Keep replies concise, warm and well-structured; use short paragraphs or bullet points. "
+    "When the user is viewing a document, its text is provided for context — use it when relevant."
+)
+
+
+def assistant_chat(body):
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return {
+            "configured": False,
+            "reply": (
+                "The AI assistant isn't configured yet. Set an ANTHROPIC_API_KEY environment variable "
+                "on the Vellum server (grab one at console.anthropic.com), then restart. Optionally set "
+                "VELLUM_AI_MODEL to choose a model (default: claude-opus-4-8)."
+            ),
+        }
+    system = ASSISTANT_SYSTEM
+    doc = body.get("doc")
+    if doc and isinstance(doc.get("content"), list):
+        text = "\n".join(b.get("text", "") for b in doc["content"] if b.get("text"))[:6000]
+        if text:
+            system += f'\n\nThe user is currently viewing a document titled "{doc.get("title", "Untitled")}":\n"""\n{text}\n"""'
+    messages = []
+    for m in (body.get("history") or [])[-8:]:
+        if m and m.get("role") and m.get("content"):
+            messages.append({"role": "assistant" if m["role"] == "assistant" else "user", "content": str(m["content"])})
+    messages.append({"role": "user", "content": str(body.get("prompt", ""))})
+
+    payload = json.dumps({"model": AI_MODEL, "max_tokens": 2048, "system": system, "messages": messages}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={"content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            j = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read()).get("error", {}).get("message", str(e))
+        except Exception:
+            err = str(e)
+        return {"configured": True, "error": True, "reply": f"Assistant error: {err}"}
+    except Exception as e:
+        return {"configured": True, "error": True, "reply": f"Assistant error: {e}"}
+    if j.get("stop_reason") == "refusal":
+        return {"configured": True, "reply": "I'm not able to help with that request."}
+    text = "\n".join(b.get("text", "") for b in j.get("content", []) if b.get("type") == "text").strip()
+    return {"configured": True, "reply": text or "(no response)"}
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -422,6 +482,13 @@ class Handler(BaseHTTPRequestHandler):
                     t = store.task_update(tid, body); return self._ok(t) if t else self._nf()
                 if method == "DELETE":
                     return self._ok({"removed": store.task_remove(tid)})
+
+        # /api/assistant
+        if path == "/api/assistant":
+            if method == "POST":
+                return self._ok(assistant_chat(body))
+            if method == "GET":
+                return self._ok({"configured": bool(os.environ.get("ANTHROPIC_API_KEY")), "model": AI_MODEL})
 
         return self._nf()
 

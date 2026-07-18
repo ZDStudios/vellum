@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 const { Spaces, Docs, Tasks, seedIfEmpty } = require('./db');
+const Assistant = require('./assistant');
 
 seedIfEmpty();
 
@@ -77,6 +78,9 @@ route('GET', '/api/tasks', (_p, q, _b, res) => {
 route('POST', '/api/tasks', (_p, _q, b, res) => ok(res, Tasks.create(b)));
 route('PATCH', '/api/tasks/:id', (p, _q, b, res) => { const t = Tasks.update(p.id, b); t ? ok(res, t) : notFound(res); });
 route('DELETE', '/api/tasks/:id', (p, _q, _b, res) => ok(res, { removed: Tasks.remove(p.id) }));
+
+route('POST', '/api/assistant', async (_p, _q, b, res) => { ok(res, await Assistant.chat(b)); });
+route('GET', '/api/assistant', (_p, _q, _b, res) => ok(res, { configured: !!process.env.ANTHROPIC_API_KEY, model: Assistant.MODEL }));
 
 function match(routeParts, pathParts) {
   if (routeParts.length !== pathParts.length) return null;

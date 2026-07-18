@@ -30,6 +30,8 @@ document can do is reachable through a clean **REST API**, a bundled **MCP serve
 - **Markdown shortcuts** — `# `, `## `, `- `, `[] `, `> `, ` ``` ` auto-convert as you type.
 - **Tasks** — a real task manager with **Inbox / Today / Upcoming / All** views, inline editing, and scheduling.
 - **Calendar** — a scrollable day-by-day agenda with *Today* highlighted; add tasks straight onto any day.
+- **AI Assistant** — a built-in Claude-powered assistant that writes, edits and summarises with your
+  current document as context. The API key stays server-side.
 - **Folders & documents** — organize work into folders, browse as cards (with live previews) or a list.
 - **Faithful Craft-style design** — clean line icons (no emoji chrome), calm dark + light themes, rounded
   cards, soft shadows, elegant typography.
@@ -134,6 +136,28 @@ Tools: `list_spaces`, `create_space`, `list_documents`, `get_document`, `create_
 `list_tasks`, `create_task`, `update_task`, `delete_task`.
 
 Then just ask: *"Add a to-do to my Launch plan doc in Vellum"* and Claude will call the tools.
+
+## 🤖 AI Assistant
+
+Vellum has a built-in **AI Assistant** (the pill in the bottom-right) that can write, edit,
+summarise and brainstorm — and it can see the document you're viewing for context. It's powered
+by [Claude](https://www.anthropic.com/claude) and runs through the server, so **your API key
+never touches the browser**.
+
+Enable it by giving the server an Anthropic API key ([get one here](https://console.anthropic.com)):
+
+```bash
+# Node
+ANTHROPIC_API_KEY=sk-ant-... node src/index.js
+# Python
+ANTHROPIC_API_KEY=sk-ant-... python main.py
+# Docker (or put it in a .env file next to docker-compose.yml)
+ANTHROPIC_API_KEY=sk-ant-... docker compose up
+```
+
+Optional: `VELLUM_AI_MODEL` picks the model (default `claude-opus-4-8`). Without a key, the app
+works fully — the assistant just shows a friendly "set your key" message. The proxy endpoint is
+`POST /api/assistant` with `{ prompt, doc?, history? }`.
 
 ## 🧠 Claude skill
 

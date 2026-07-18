@@ -13,6 +13,9 @@ services:
     environment:
       - PORT=4321
       - VELLUM_DB=/data/vellum-data.json
+      # AI Assistant (optional): set ANTHROPIC_API_KEY in your shell or a .env file next to this compose file.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - VELLUM_AI_MODEL=${VELLUM_AI_MODEL:-claude-opus-4-8}
     restart: unless-stopped
 
 volumes:
